@@ -1,0 +1,58 @@
+# ******************************************************************************
+# Credentials for deployment:
+# ******************************************************************************
+scapp_usr     = "NOT_SET"
+scapp_pwd     = "NOT_SET"
+scapp_url     = "NOT_SET"
+scapp_org     = "NOT_SET"
+scapp_space   = "NOT_SET"
+
+# ******************************************************************************
+# Tasks:
+# ******************************************************************************
+task :default => [:package]
+
+task :clean do
+  sh "rm -rf hello-*.zip"
+end
+
+task :package => [:clean] do
+  sh "cd helloworld && zip -r hello-#{Time.now.to_i}.zip *"
+  sh "mv helloworld/hello-*.zip ."
+end
+
+task :deploy => [:package] do
+  scapp_appname = "democdgo"
+  new_version = `ls hello-* | egrep -o  '[0-9]+'`.gsub("\n","")
+  puts "Going to deploy version: #{new_version}"
+
+  # Login:
+  sh "cf login -a #{scapp_url} -u #{scapp_usr} -p #{scapp_pwd} -o #{scapp_org} -s #{scapp_space}"
+
+  puts "Currently running apps:"
+  sh "cf apps"
+
+  # Get currently running version:
+  old_version = `cf apps | grep #{scapp_appname}- | awk {'print $1'} | sed 's/-/ /g' | awk {'print $2'}`.gsub("\n","")
+  puts "Old (and to be replaced) Version is: #{old_version}"
+
+  # Push new app:
+  sh "cf push #{scapp_appname}-#{new_version} -n #{scapp_appname}-#{new_version} -m 64M -i 1 -p hello-#{new_version}.zip -b go_buildpack"
+
+  # Map traffic to new app too:
+  sh "cf map-route #{scapp_appname}-#{new_version} scapp.io -n #{scapp_appname}"
+
+  sh "cf routes"
+  # Unmap and delete temp traffic route:
+  sh "cf unmap-route #{scapp_appname}-#{new_version} scapp.io -n #{scapp_appname}-#{new_version}"
+  sh "cf delete-route -f -n #{scapp_appname}-#{new_version} scapp.io"
+
+  if old_version.length > 0
+    # Unmap traffic from old app:
+    sh "cf unmap-route #{scapp_appname}-#{old_version} scapp.io -n #{scapp_appname}"
+
+    # Delete old app:
+    sh "cf delete -r -f #{scapp_appname}-#{old_version}"
+  end
+  sh "cf apps"
+end
