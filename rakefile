@@ -45,7 +45,6 @@ task :deploy => [:package] do
   sh "cf routes"
   # Unmap and delete temp traffic route:
   sh "cf unmap-route #{scapp_appname}-#{new_version} scapp.io -n #{scapp_appname}-#{new_version}"
-  sh "cf delete-route -f -n #{scapp_appname}-#{new_version} scapp.io"
 
   if old_version.length > 0
     # Unmap traffic from old app:
